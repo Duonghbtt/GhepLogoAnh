@@ -30,6 +30,12 @@ FORMAT_TO_EXTENSION = {
     "WEBP": ".webp",
     "HEIF": ".jpg",
 }
+EXTENSION_TO_MIME = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
 POSITION_OPTIONS = {
     "Góc dưới phải": "bottom_right",
     "Góc dưới trái": "bottom_left",
@@ -45,6 +51,13 @@ class SourceImage:
     name: str
     data: bytes
     extension: str
+
+
+@dataclass
+class OutputImage:
+    name: str
+    data: bytes
+    mime_type: str
 
 
 def normalize_image_format(image_format: str | None) -> str | None:
@@ -262,7 +275,7 @@ def make_unique_name(candidate: str, used_names: set[str]) -> str:
     return unique_name
 
 
-def build_result_zip(
+def build_output_images(
     images: Iterable[SourceImage],
     logo_source: SourceImage,
     position_key: str,
@@ -270,26 +283,41 @@ def build_result_zip(
     opacity_percent: int,
     margin: int,
     keep_transparency: bool,
-) -> bytes:
-    zip_buffer = BytesIO()
+) -> list[OutputImage]:
     used_names: set[str] = set()
+    output_images: list[OutputImage] = []
+
+    for image_source in images:
+        merged_image = merge_logo(
+            image_source=image_source,
+            logo_source=logo_source,
+            position_key=position_key,
+            logo_width_percent=logo_width_percent,
+            opacity_percent=opacity_percent,
+            margin=margin,
+            keep_transparency=keep_transparency,
+        )
+        output_name = make_unique_name(
+            normalized_output_name(image_source.name, image_source.extension),
+            used_names,
+        )
+        output_images.append(
+            OutputImage(
+                name=output_name,
+                data=export_image(merged_image, image_source.extension),
+                mime_type=EXTENSION_TO_MIME.get(image_source.extension, "application/octet-stream"),
+            )
+        )
+
+    return output_images
+
+
+def build_result_zip(output_images: Iterable[OutputImage]) -> bytes:
+    zip_buffer = BytesIO()
 
     with zipfile.ZipFile(zip_buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for image_source in images:
-            merged_image = merge_logo(
-                image_source=image_source,
-                logo_source=logo_source,
-                position_key=position_key,
-                logo_width_percent=logo_width_percent,
-                opacity_percent=opacity_percent,
-                margin=margin,
-                keep_transparency=keep_transparency,
-            )
-            output_name = make_unique_name(
-                normalized_output_name(image_source.name, image_source.extension),
-                used_names,
-            )
-            archive.writestr(output_name, export_image(merged_image, image_source.extension))
+        for output_image in output_images:
+            archive.writestr(output_image.name, output_image.data)
 
     return zip_buffer.getvalue()
 
@@ -322,6 +350,7 @@ def build_state_signature(
 def reset_download_if_needed(current_signature: tuple) -> None:
     previous_signature = st.session_state.get("result_signature")
     if previous_signature != current_signature:
+        st.session_state.pop("result_files", None)
         st.session_state.pop("result_zip", None)
         st.session_state.pop("result_signature", None)
 
@@ -455,7 +484,8 @@ def main() -> None:
 
     with action_col:
         st.subheader("Xuất kết quả")
-        st.write("Kết quả sẽ được gom thành một file ZIP để tải về.")
+        st.write("Bạn có thể tải tất cả bằng một file ZIP hoặc tải từng ảnh riêng.")
+        st.caption("Trên điện thoại, ZIP là cách tải hết một lần tiện nhất.")
 
         if st.button("Ghép logo và tải xuống", type="primary", use_container_width=True):
             if not source_images:
@@ -464,7 +494,7 @@ def main() -> None:
                 st.error("Vui lòng tải lên logo hợp lệ trước khi xử lý.")
             else:
                 try:
-                    result_zip = build_result_zip(
+                    result_files = build_output_images(
                         images=source_images,
                         logo_source=logo_source,
                         position_key=POSITION_OPTIONS[position_label],
@@ -473,6 +503,15 @@ def main() -> None:
                         margin=margin,
                         keep_transparency=keep_transparency,
                     )
+                    result_zip = build_result_zip(result_files)
+                    st.session_state["result_files"] = [
+                        {
+                            "name": result_file.name,
+                            "data": result_file.data,
+                            "mime_type": result_file.mime_type,
+                        }
+                        for result_file in result_files
+                    ]
                     st.session_state["result_zip"] = result_zip
                     st.session_state["result_signature"] = current_signature
                     st.success(f"Đã ghép logo cho {len(source_images)} ảnh.")
@@ -481,12 +520,26 @@ def main() -> None:
 
         if st.session_state.get("result_zip"):
             st.download_button(
-                label="Tải file ZIP kết quả",
+                label="Tải tất cả dưới dạng ZIP",
                 data=st.session_state["result_zip"],
                 file_name="anh_da_ghep_logo.zip",
                 mime="application/zip",
                 use_container_width=True,
             )
+
+        result_files = st.session_state.get("result_files", [])
+        if result_files:
+            with st.expander("Hoặc tải từng ảnh riêng", expanded=False):
+                st.caption("Một số trình duyệt điện thoại có thể yêu cầu bấm tải từng ảnh.")
+                for index, result_file in enumerate(result_files):
+                    st.download_button(
+                        label=f"Tải {Path(result_file['name']).name}",
+                        data=result_file["data"],
+                        file_name=result_file["name"],
+                        mime=result_file["mime_type"],
+                        key=f"download-result-{index}-{result_file['name']}",
+                        use_container_width=True,
+                    )
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@
 - Bỏ qua file không phải ảnh trong ZIP.
 - Thông báo lỗi hiển thị rõ định dạng thực tế mà ứng dụng phát hiện được.
 - Xử lý hoàn toàn trong bộ nhớ để phù hợp deploy trên Streamlit Community Cloud.
-- Xuất kết quả thành file ZIP để người dùng tải về.
+- Xuất kết quả thành file ZIP hoặc tải từng ảnh riêng, tiện hơn khi dùng trên điện thoại.
 
 ## Chạy local
 
