@@ -9,12 +9,26 @@ import zipfile
 import streamlit as st
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+try:
+    from pillow_heif import register_heif_opener
+except ImportError:
+    register_heif_opener = None
+else:
+    register_heif_opener()
 
-ALLOWED_FORMATS = {"PNG", "JPEG", "WEBP"}
+
+SUPPORTED_FORMAT_TEXT = "PNG, JPG/JPEG, WEBP hoặc HEIC/HEIF"
+UPLOAD_IMAGE_TYPES = ["png", "jpg", "jpeg", "webp", "heic", "heif"]
+FORMAT_ALIASES = {
+    "JPG": "JPEG",
+    "HEIC": "HEIF",
+}
+ALLOWED_FORMATS = {"PNG", "JPEG", "WEBP", "HEIF"}
 FORMAT_TO_EXTENSION = {
     "PNG": ".png",
     "JPEG": ".jpg",
     "WEBP": ".webp",
+    "HEIF": ".jpg",
 }
 POSITION_OPTIONS = {
     "Góc dưới phải": "bottom_right",
@@ -33,6 +47,14 @@ class SourceImage:
     extension: str
 
 
+def normalize_image_format(image_format: str | None) -> str | None:
+    if image_format is None:
+        return None
+
+    normalized_format = image_format.upper()
+    return FORMAT_ALIASES.get(normalized_format, normalized_format)
+
+
 def inspect_image_bytes(data: bytes, source_name: str) -> str:
     try:
         with Image.open(BytesIO(data)) as image:
@@ -41,12 +63,15 @@ def inspect_image_bytes(data: bytes, source_name: str) -> str:
     except (UnidentifiedImageError, OSError) as exc:
         raise ValueError(f"`{source_name}` không phải ảnh hợp lệ hoặc bị lỗi định dạng.") from exc
 
-    if image_format not in ALLOWED_FORMATS:
+    normalized_format = normalize_image_format(image_format)
+    if normalized_format not in ALLOWED_FORMATS:
+        detected_format = image_format.upper() if image_format else "UNKNOWN"
         raise ValueError(
-            f"`{source_name}` có định dạng không được hỗ trợ. Chỉ dùng PNG, JPG/JPEG hoặc WEBP."
+            f"`{source_name}` có định dạng thực tế là `{detected_format}`, hiện không được hỗ trợ. "
+            f"Chỉ dùng {SUPPORTED_FORMAT_TEXT}."
         )
 
-    return FORMAT_TO_EXTENSION[image_format]
+    return FORMAT_TO_EXTENSION[normalized_format]
 
 
 def read_image_upload(uploaded_file) -> SourceImage:
@@ -318,7 +343,7 @@ def main() -> None:
         st.header("Tải dữ liệu")
         uploaded_images = st.file_uploader(
             "Ảnh đầu vào",
-            type=["png", "jpg", "jpeg", "webp"],
+            type=UPLOAD_IMAGE_TYPES,
             accept_multiple_files=True,
             help="Bạn có thể chọn nhiều ảnh cùng lúc.",
         )
@@ -329,7 +354,7 @@ def main() -> None:
         )
         uploaded_logo = st.file_uploader(
             "Logo",
-            type=["png", "jpg", "jpeg", "webp"],
+            type=UPLOAD_IMAGE_TYPES,
             accept_multiple_files=False,
         )
 

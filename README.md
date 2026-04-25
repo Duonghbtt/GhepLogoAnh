@@ -4,12 +4,14 @@
 
 ## Tính năng chính
 
-- Upload nhiều ảnh `png`, `jpg`, `jpeg`, `webp`.
+- Upload nhiều ảnh `png`, `jpg`, `jpeg`, `webp`, `heic`, `heif`.
 - Hoặc upload một file `.zip` chứa nhiều ảnh.
-- Upload logo `png`, `jpg`, `jpeg`, `webp`.
+- Upload logo `png`, `jpg`, `jpeg`, `webp`, `heic`, `heif`.
 - Tùy chỉnh vị trí, kích thước theo `%` chiều rộng ảnh, độ mờ và margin.
 - Hỗ trợ giữ nền trong suốt của logo nếu logo có kênh alpha.
+- Ảnh `HEIC/HEIF` được đọc vào và xuất kết quả dưới dạng `JPG` để dễ tương thích hơn.
 - Bỏ qua file không phải ảnh trong ZIP.
+- Thông báo lỗi hiển thị rõ định dạng thực tế mà ứng dụng phát hiện được.
 - Xử lý hoàn toàn trong bộ nhớ để phù hợp deploy trên Streamlit Community Cloud.
 - Xuất kết quả thành file ZIP để người dùng tải về.
 
